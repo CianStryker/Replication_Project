@@ -8,45 +8,76 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
+# Figure 6 time. This is harder
+# tbh because they're using more
+# data which I believe are coordinate
+# lists. It starts with this rm(list)) 
+# thing which I think just clears up R
+# before you start. 
+
 rm(list=ls())
 
-# load required libraries
+# These are the packages they're using. I only
+# know ggplot and readstat13. 
+
 library(AER)
 library(ggplot2)
 library(readstata13)
-library(spdep) # conflict with older version of dplyr if error message is shown update dplyr to 0.8.0
+library(spdep) 
 library(tseries)
+
+library(spatialreg)
 ```
 
-```{r}
-# read data
+```{r Data Loading}
+
+# Like in Figure 5 they use the stata
+# command to load in the main data. 
+
 data <- read.dta13("./kyrgyzstan.dta")
 ```
 
-```{r}
+```{r My Loading}
+
+# I do this so I can actually the load the data
+# so I can try and replicate as I go along. 
+
 load("~/Replication_Project/Data/kyrgyzstan.RData")
 
 data <- table
 ```
 
-```{r}
-##### Cleaning 
-# recode variables
+```{r Cleaning}
+
+# Just like figure 5 they want to clean
+# their data by setting them as integers and
+# shifting the binary to 0 and -1.
+
 data$affected <- as.integer(data$affected)
 data$affected <- data$affected - 1
 data$pd_in <- as.integer(data$pd_in)
 data$pd_out <- as.integer(data$pd_out)
 
-# generate new variables
+# This is just renaming the apc_min_distance
+# variable as distance right? I'm pretty sure 
+# that's what's happening. 
+
 data$distance <- data$apc_min_distance
 
-# rename variable 
+# This is another renaming bit of code. 
+
 data$social_cap_retro <- data$leadership
 
-# subset data set according to ethnic groups
+# They prefer to subset instead of filter so
+# they've done just that again. 
+
 data_uzbek <- data[which(data$ethnicity=="Uzbek"),]
 
-# scale variables
+# Now they're scaling again. Note for reader or me: 
+# the start of every figure and table begins much the same 
+# way so my notes on things like scaling will become
+# shorter as I run into the same code again and again. 
+
 data_uzbek$pd_in_scale <- scale(data_uzbek$pd_in)
 data_uzbek$dg_in_scale <- scale(data_uzbek$dg_in)
 data_uzbek$pd_out_scale <- scale(data_uzbek$pd_out)
@@ -57,24 +88,39 @@ data_uzbek$cooperation_index <- rowSums(cbind(data_uzbek$pd_in_scale,
                                               data_uzbek$dg_out_scale), na.rm=T)/4
 ```
 
-```{r}
-##### Figure
-# First stage #
+```{r Stage 1}
+
+# So to start they want to make their distance variable
+# to be the negative version of apc_min_distance. Then it 
+# gets a little more complicated. So essentially another 
+# variable called id_psu has 196 groups. So the authors
+# want to create a new data frame that is the aggregation of 
+# the mean of the affected and distance variables on each 
+# group of id_psu. 
+
 data_uzbek$distance <- 1-data_uzbek$apc_min_distance
 dataAgg <- aggregate(data_uzbek[,c("affected", "distance")], 
                      list(data_uzbek$id_psu),
                      mean)
 ```
                      
-```{r}
-# run first stage regressions for individual and aggregate data
+```{r Regressions}
+
+# Now they are running regressions but on two different levels
+# of analysis. One on all uzbeks and the other on just the 
+# aggregated on psu level. But the key is to see how distance
+# interacts with affected.  
+
 first_stage_ind <- lm(affected ~ distance, data=data_uzbek)
 first_stage_psu <- lm(affected ~ distance, data=dataAgg)
 ```
 
-```{r}
-# IV models
-# run iv regressions
+```{r Extraction}
+
+# Now they are runnign the same regressions but for just distance
+# on the scaled prisonner dilemma, dictator game, and overall 
+# cooperation variables. 
+
 model11 <- lm(pd_in_scale ~ distance , data=data_uzbek)
 model12 <- ivreg(pd_in_scale ~ affected | apc_min_distance, data = data_uzbek)
 model21 <- lm(dg_in_scale ~ distance , data=data_uzbek)
@@ -87,22 +133,39 @@ model51 <- lm(cooperation_index ~ distance , data=data_uzbek)
 model52 <- ivreg(cooperation_index ~ affected  | apc_min_distance , data = data_uzbek)
 ```
 
-```{r}
-# aggregate data
+```{r More Aggregation}
+
+# Okay so they are aggregating again like before on the psu 
+# but now they are doing it for the scale variables, plus economy index,
+# state index, and they social_cap_retro. Checks out. 
+
 dataAgg <- aggregate(data_uzbek[,c("apc_min_distance", "distance", "pd_in_scale", "dg_in_scale", 
                                    "pd_out_scale", "dg_out_scale", "cooperation_index", "affected", 
                                    "economy_index", "state_index", "social_cap_retro")], 
                      list(data_uzbek$id_psu),
                      mean)
+
+# This is just renaming the first column.
+
 names(dataAgg)[1] <- "psu"
+
+# Now they want to drop the NAs I think. 
 
 dataAgg <- dataAgg[!is.na(dataAgg$social_cap_retro),] 
 ```
 
-```{r}
-# load and edit the travel time matrix
+```{r Time Matrix}
+
+# So here is the first part of the code that confuses me. 
+# Also its the only part of the code I can't replicate for 
+# some reason. So here is where I need Alice's help. 
+
+# I believve they are just reading in travel times for APCs. 
 
 ttmat <- read.matrix("Data/z.travel_time.csv", header = T, sep = ";", skip = 0)
+
+# Then everything here is just reorganizing the data before they 
+# combine it with the dataAgg from before. 
 
 row.names(ttmat) <- ttmat[,1]
 ttmat <- ttmat[,2:ncol(ttmat)]
@@ -110,11 +173,20 @@ ttmat <- ttmat[row.names(ttmat) %in% dataAgg$psu, colnames(ttmat) %in% dataAgg$p
 ttmat_sort <- ttmat[order(as.numeric(row.names(ttmat))),]
 ttmat_sort <- ttmat_sort[,order(as.numeric(colnames(ttmat_sort)))]
 
+# Here is where I get stuck replicating. I get the error 
+# "x must be a square matrix". I think they just want to use a matrix
+# to simplify the data but I'm not sure. 
+
 ttlistw <- mat2listw(ttmat_sort, row.names = NULL, style = "M")
 ```
 
-```{r}
-# formulas
+```{r Formula}
+
+# This gets harder for me now because I can't
+# run and follow the code, but this seems clear 
+# at least. They are creating formulars for later
+# regressions. 
+
 f1 <- pd_in_scale ~ distance 
 f2 <- dg_in_scale ~ distance 
 f3 <- pd_out_scale ~ distance 
@@ -122,8 +194,11 @@ f4 <- dg_out_scale ~ distance
 f5 <- cooperation_index ~ distance 
 ```
 
-```{r}
-#basic OLS models
+```{r Regressions}
+
+# They're running more OLS regressions the same
+# as before and from figure 5. 
+
 model1 <- lm(pd_in_scale ~ distance , data=dataAgg)
 model2 <- lm(dg_in_scale ~ distance , data=dataAgg)
 model3 <- lm(pd_out_scale ~ distance , data=dataAgg)
@@ -131,8 +206,14 @@ model4 <- lm(dg_out_scale ~ distance , data=dataAgg)
 model5 <- lm(cooperation_index ~ distance , data=dataAgg)
 ```
 
-```{r}
-# spatial models
+```{r Spatial Model Regressions}
+
+# So they reorder and then procede to run a series of 
+# regressions using the formulas they wrote before. Also
+# I noticed that these functions are deprecated so I need
+# adjust and use spatialreg package. Something else I'll 
+# need Alice's help to wrap my head around. 
+
 dataAgg <- dataAgg[order(dataAgg$psu),]
 model13 <- errorsarlm(f1, data=dataAgg, ttlistw, tol.solve=1.0e-30)
 model23 <- errorsarlm(f2, data=dataAgg, ttlistw, tol.solve=1.0e-30)
@@ -141,7 +222,12 @@ model43 <- errorsarlm(f4, data=dataAgg, ttlistw, tol.solve=1.0e-30)
 model53 <- errorsarlm(f5, data=dataAgg, ttlistw, tol.solve=1.0e-30)
 ```
 
-```{r}
+```{r Extraction}
+
+# Great. I understand all of this again. They are literally
+# just grabbing all the info they want from thier list regression
+# results. They'll move on to graphing soon. 
+
 model11Frame <- data.frame(Variable = rownames(summary(model11)$coef),
                            Coefficient = summary(model11)$coef[, 1],
                            SE = summary(model11)$coef[, 2],
@@ -204,50 +290,74 @@ model53Frame <- data.frame(Variable = "affected",
                            modelName = "Index")
 ```
 
-```{r}
-# bind all models to dataframes
-# Instruments
+```{r Tweaking}
+
+# So they wanted to bring all models done for
+# the original data. And then arrange the order
+# using factor. 
+
 allModelFrame1 <- data.frame(rbind(model11Frame, model21Frame, model31Frame, model41Frame, model51Frame))
 allModelFrame1$Variable <- c(1,2,3,4,5)
 allModelFrame1$Variable <- factor(allModelFrame1$Variable, labels=c("Prisoner's Dilemma  Ingroup", "Dictator Game  Ingroup", "Prisoner's Dilemma  Outgroup", "Dictator Game  Outgroup", "Prosociality-  index"))
 levels(allModelFrame1$Variable) <- gsub("  ", "\n", levels(allModelFrame1$Variable))
 ```
 
-```{r}
-# 2SLS
+```{r Tweaking 2SLS}
+
+# So now they want to combine all the models that have the spatial 
+# component to them. I'm a little confused about what 2SL is, but
+# the code is similar to before. 
+
 allModelFrame2 <- data.frame(rbind(model12Frame, model22Frame, model32Frame, model42Frame, model52Frame))
 allModelFrame2$Variable <- c(1,2,3,4,5)
 allModelFrame2$Variable <- factor(allModelFrame2$Variable, labels=c("Prisoner's Dilemma  Ingroup", "Dictator Game  Ingroup", "Prisoner's Dilemma  Outgroup", "Dictator Game  Outgroup", "Prosociality-  index"))
 levels(allModelFrame2$Variable) <- gsub("  ", "\n", levels(allModelFrame2$Variable))
 ```
 
-```{r}
-# Instrument (SAM)
+```{r Tweaking SAM}
+
+# Same as before but now for the instrument SAM. 
+# I find this portion of the paper really confusing 
+# to be honest, but again the code is understandable. 
+
 allModelFrame3 <- data.frame(rbind(model13Frame, model23Frame, model33Frame, model43Frame, model53Frame))
 allModelFrame3$Variable <- c(1,2,3,4,5)
 allModelFrame3$Variable <- factor(allModelFrame3$Variable, labels=c("Prisoner's Dilemma  Ingroup", "Dictator Game  Ingroup", "Prisoner's Dilemma  Outgroup", "Dictator Game  Outgroup", "Prosociality-  index"))
 levels(allModelFrame3$Variable) <- gsub("  ", "\n", levels(allModelFrame3$Variable))
 ```
 
-```{r}
-# rowbind all models 
+```{r Final Tweaking}
+
+# Okay great. They want to combine the three combinations together. 
+# Also they're doing something weird to the data with rep? 
+
 allModelFram <- rbind(allModelFrame1, allModelFrame2, allModelFrame3)
 allModelFram$matrix_style <- rep(c("Instrument", "2SLS", "Instrument (SAM)"),each=5)
 ```
 
-```{r}
-# set multipliers for confidence intervals
+```{r CI}
+
+# Calculating and setting their confidence intervals. 
+
 interval1 <- -qnorm((1-0.90)/2)  # 90% multiplier
 interval2 <- -qnorm((1-0.95)/2)  # 95% multiplier
 ```
 
-```{r}
-# set up dodge
+```{r Dodge?}
+
+# They set up their dodge position? I guess
+# that helps with the graphing? 
+
 pd = position_dodge(0.5)
 ```
 
-```{r}
-# build plot
+```{r Graphing}
+
+# Same graphing code as figure 5 but now obviously they are including 
+# the additional instrumental variables. Code makes sense. Overall logic
+# is harder for me, but I'm honing in on what I don't understand and will
+# need help with later. 
+
 figure6 <- ggplot(allModelFram, aes(shape=matrix_style)) + 
   geom_hline(yintercept = 0, colour = gray(1/2), lty = 2) + 
   geom_linerange(aes(x = Variable, ymin = Coefficient - SE*interval1,
@@ -265,7 +375,9 @@ figure6 <- ggplot(allModelFram, aes(shape=matrix_style)) +
   theme(text = element_text(size=18, family="Times"))
 ```
 
-```{r}
-# plot output
+```{r Output}
+
+# They want the output. 
+
 figure6
 ```

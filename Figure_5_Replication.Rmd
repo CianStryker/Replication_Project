@@ -8,33 +8,80 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-library(readr)
-library(tidyverse)
+# Alright so my authors have decided to create separate
+# R script files for each of their major figures. Figures
+# 1-4 were made with different software and are not
+# included in the replication. Figure 7 is GIS. They
+# aren't really that necessary and can be worked around
+# to still get the point of the paper across. 
+
+# I have loaded in the R script pages of what I can 
+# replicate which are figures 5, 6, 8, and 9, as well
+# as Table 1. After loading in the orignal script files, 
+# I've placed them into R mark down documents that will make
+# life easier for me moving forward. All code chunks are 
+# my titles, which I'm using to organize my thoughts. 
+
+# Here they load in the packages they'll be using. 
+# My authors seem to prefer using base r
+
+library(ggplot2)
+library(readstata13)
 ```
 
-```{r}
+
+```{r Loading}
+
+# So here they just load in their main
+# data set using a command from readstata13.
+
+data <- read.dta13("./kyrgyzstan.dta")
+```
+
+```{r My loading}
+
+# This is actually my code that I wrote so I could
+# begin trying to replicate their work.
 
 load("~/Replication_Project/Data/kyrgyzstan.RData")
-
 data <- table
-
 ```
 
-```{r}
+```{r Starting}
+
+# This seems like they're just shifting the
+# data they want to use later by making certain
+# columns integers, specifically the affected 
+# and prisoner dilemma columns. Oh and the affected
+# - 1 bit is to shift the binary from 1 and 0s to
+# 0 and -1s. 
+
 data$affected <- as.integer(data$affected)
 data$affected <- data$affected - 1
 data$pd_in <- as.integer(data$pd_in)
 data$pd_out <- as.integer(data$pd_out)
 ```
 
-```{r}
-# subset data set according to ethnic groups
+```{r Subset}
+
+# here they just want to grab their data for Uzbeks
+# as opposed to including the data for thier Kyrgyz 
+# respondents. 
+
 data_uzbek <- data[which(data$ethnicity=="Uzbek"),]
 ```
 
-```{r}
+```{r Scaling Time}
 
-# scale variables
+# Alright I had to find out what scale() does, but
+# apparently its a way of standardizing a bunch of 
+# data. The specifics are lost on my but the authors are 
+# scaling so that they can run regressions on the various 
+# in and out groups for the prisonners dilemma and dictator 
+# game results. They are also making an overall cooperation
+# index variable for later graphing, which they want to be 
+# on one standard scale, hence the scaling. 
+
 data_uzbek$pd_in_scale <- scale(data_uzbek$pd_in)
 data_uzbek$dg_in_scale <- scale(data_uzbek$dg_in)
 data_uzbek$pd_out_scale <- scale(data_uzbek$pd_out)
@@ -45,9 +92,14 @@ data_uzbek$cooperation_index <- rowSums(cbind(data_uzbek$pd_in_scale,
                                               data_uzbek$dg_out_scale), na.rm=T)/4
 ```
 
-```{r}
-##### Figure
-# calculate correlation via OLS for Uzbek Sample 
+```{r Regressions}
+
+# Alright I totally understand what's happening here. 
+# They are just running an OLS regression on the variables
+# that they made and scaled in the last step and trying
+# to see the effect that the affected variable had on each
+# of them in turn. 
+
 model1 <- lm(pd_in_scale ~ affected, data=data_uzbek)
 model2 <- lm(dg_in_scale ~ affected, data=data_uzbek)
 model3 <- lm(pd_out_scale ~ affected, data=data_uzbek)
@@ -56,8 +108,14 @@ model5 <- lm(cooperation_index ~ affected, data=data_uzbek)
 ```
 
                                           
-```{r}
-# extract coefficients and standard errors from models 
+```{r Regression Extraction}
+
+# This all makes sense too. After running the regressions 
+# the authors have 5 list type data, but they need to extract 
+# the information that they want. It's kinda weird but I see that 
+# using this code they are getting the Variable, Coefficient, 
+# standard error, and name of test for each model. Cool. 
+
 model1Frame <- data.frame(Variable = rownames(summary(model1)$coef),
                           Coefficient = summary(model1)$coef[, 1],
                           SE = summary(model1)$coef[, 2],
@@ -80,8 +138,16 @@ model5Frame <- data.frame(Variable = rownames(summary(model5)$coef),
                           modelName = "Index")[2,]
 ```
 
-```{r}
-# rowbind data (coef and se) from regression models
+```{r Tweaking?}
+
+# So now they want to put all those extracted models together
+# in one dataframe. Cool. Checks out. They're using rbind to do taht
+# giving them a numeric order, and then using factor to put them 
+# in the order that they want. Not really sure what levels() does, 
+# but it looks like it cleans up the variable names to make them 
+# easier to graph later. 
+
+
 allModelFrame <- data.frame(rbind(model1Frame, model2Frame, model3Frame, model4Frame, model5Frame))
 allModelFrame$Variable <- c(1,2,3,4, 5)
 allModelFrame$Variable <- factor(allModelFrame$Variable, 
@@ -91,20 +157,34 @@ allModelFrame$Variable <- factor(allModelFrame$Variable,
 levels(allModelFrame$Variable) <- gsub("  ", "\n", levels(allModelFrame$Variable))
 ```
 
-```{r}
-# set confidence interval parameters
+```{r Setting Confidence Intervals}
+
+# Okay so they want to set confidence intervals 
+# at 90% and 95%. Seems clear. 
+
 interval1 <- -qnorm((1-0.90)/2)  # 90% multiplier
 interval2 <- -qnorm((1-0.95)/2)  # 95% multiplier
 ```
 
-```{r}
-# set colors for graph
+```{r Colors}
+
+# They want all colors to be 00000, which is probably black right? 
+
 myColors <- c("#000000", "#000000", "#000000", "#000000", "#000000")
 ```
 
 
-```{r}
-# Plot
+```{r Graphing Time}
+
+# I understand ggplot so this is cool. A bunch of detail stuff such
+# as adding a vertical dotted line at 0.00 mark. Then they make a 
+# horizontal linerange for every variable with thier ranges being
+# the SE * the confidence intervals calculated before. Then the points
+# show the mean effect which is the SE times the 95% CI with some cool
+# shapes added in for coolness. Switching up the y axis labels, setting
+# the theme, setting the colors, getting rid of the ticks, and generally
+# making things pretty. 
+
 figure5 <- ggplot(allModelFrame, aes(colour = as.factor(Variable))) + 
   geom_hline(yintercept = 0, colour = gray(1/2), lty = 2) + 
   geom_linerange(aes(x = Variable, ymin = Coefficient - SE*interval1,
@@ -122,7 +202,12 @@ figure5 <- ggplot(allModelFrame, aes(colour = as.factor(Variable))) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-```{r}
-# output
+```{r Output}
+
+# Ah here they want to show
+# the graph they made. I 
+# generally speaking understand 
+# figure 5. 
+
 figure5
 ```

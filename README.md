@@ -1,4 +1,9 @@
-This is my Github repo for my GOV 1006 Replication project. I will be replicating the paper "Ethnic Riots and Prosocial Behavior: Evidence from Kyrgyzstan" writtenby Anselm Hager, Krzysztof Krakowski, and Max Schaub. 
+## Ethnic Riots and Prosocial Behavior: Osh, Kyrgyzstan
+
+
+This is my Github repo for my GOV 1006 Replication project. I will be replicating the paper "Ethnic Riots and Prosocial Behavior: Evidence from Kyrgyzstan" written by Anselm Hager, Krzysztof Krakowski, and Max Schaub. Using survey data performed in Osh, Kyrgyzstan after the 2010 ethnic riots, this paper attempts to see if exposure to ethnic riots has a negative effect on both in and out group members. It does this mostly through recording reactions to a prisoner's dilemma and dictator game that measure prosocial behavior. There is also robust testing of confounding variables such as access to and geographic location of APC vehicles, which rely on geospatial data that is included within a series of regressions. 
+
+Each of the reproducible figures and tables have separate rmarkdown documents. The reproducible figures are Figures 5, 6, 8, and 9, as well as Table 1. The other figures are made via GIS software or visual editing software, but they are not essential to the paper's findings. Some are reproducible from scratch because they are descriptive in nature and not reliant on the author's data sets. There are four data sets that are associated with the project. 
 
 The link to the original paper: https://www.cambridge.org/core/services/aop-cambridge-core/content/view/B87A1F338F521174C8FEB51294AAE00C/S000305541900042Xa.pdf/ethnic_riots_and_prosocial_behavior_evidence_from_kyrgyzstan.pdf
 

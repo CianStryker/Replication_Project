@@ -8,9 +8,19 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
-# Setup
+# Alright figure 8's turn and luckily
+# the code is very similar to before. 
+# That being said why did they put
+# options(max.print=1000)? My guess is
+# because their for loop command later is
+# so huge that they need this. 
+
 rm(list=ls())
 options(max.print=10000)
+
+# Same deals here. Alot of 
+# packages I don't know like 
+# foreign, but overall I'm familiar.
 
 library(foreign)
 library(plyr)
@@ -21,19 +31,30 @@ library(ggplot2)
 library (dplyr)
 ```
 
-```{r}
-data <- read.dta13("./kyrgyzstan.dta")
+```{r Data Loading}
+
+# Their data loading code. 
+
+data <- read.dta13("/kyrgyzstan.dta")
 
 ```
 
 
-```{r}
+```{r My Data Loading}
+
+# This is my code again. 
+
 load("~/Replication_Project/Data/kyrgyzstan.RData")
 
 data <- table
 ```
 
-```{r}
+```{r Scaling}
+
+# Like I said before the scaling code doesn't change
+# in between the figures so I won't comment on it 
+# much anymore. This is just thier scaling and making
+# the cooperation index var.
 
 data_uzbek <- data[which(data$ethnicity=="Uzbek"),]
 data_uzbek$pd_in_scale <- scale(data_uzbek$pd_in)
@@ -45,12 +66,15 @@ data_uzbek$distance <- data_uzbek$apc_min_distance
 ```
 
 
-```{r}
-################################
-###### IV estimates as reference
-################################
+```{r Regressions?}
 
-#Combined sample
+# So the first lin eis a typical regression. The third
+# is also a typical regression but for the instrument i.e.
+# distance to apc vehicle. The second is an instrumental 
+# variable regression. I understand what it is by reading
+# the notes on it, but I'll need more time to get
+# what it is doing here. 
+
 ols <- lm(cooperation_index ~ affected, data = data_uzbek)
 iv <- ivreg(cooperation_index ~ affected | distance , data = data_uzbek)
 instrument <- lm(cooperation_index ~ distance , data = data_uzbek)
@@ -58,36 +82,52 @@ instrument <- lm(cooperation_index ~ distance , data = data_uzbek)
 
 
 
-```{r}
-#################################
-#### Insheet distance matrix ####
-#################################
+```{r More Data}
 
-# Insheet distances from any given PSU to 9500 randomly chosen APC locations 
+# So here the authors wanted to randomize APC locations to 
+# test the affect they have on figure 6. I get that. So they load in 
+# the distance data they chose for that. Their note says 
+# "Insheet distances from any given PSU to 9500 randomly chosen APC locations"
+
 DistMat <- as.data.frame(read.csv("Data/distances_ri.csv", header = TRUE, sep =","))[-1]
 
-# Remove "X" from name
+# So every column in DistMat has an X in it. Here they really just want
+# to get rid of those. 
+
 colnames(DistMat) <- c(na.omit(as.numeric(unlist(strsplit(as.matrix(colnames(DistMat)), "X"))))) 
 
-# Obtain PSU names from survey data as character to match to DistMat
+# Now they want to obtain PSU names from 
+# the survey data as character to match to DistMat
+
 psus <- c(as.character(unique(data_uzbek$id_psu)))
 
-# Reduce distance matrix to entries for PSUs where we sampled Uzbek respondents
+# Here they want to reduce distance matrix to 
+# entries for PSUs where they sampled Uzbek respondents
+
 sample_psus <- names(DistMat)[(names(DistMat) %in% psus)]
 DistMat <- DistMat[, sample_psus]
 
-# Add information whether East of Ak-Buura river
+# So the authors also had data about whether these apc locations
+# were east of the Akbuura river or not. This is them loading it in 
+# and then adding it to their other data. 
+
 eoa <- as.data.frame(read.csv("Data/ri_east_of_akbuura.csv", header = TRUE))[2]
 DistMat$eoa <-eoa
 
-# Create matrices that only contain values for either east or west
+# Now they want to create matrices of whether the locations were
+# east or west of the Akbuura river. Then they wanted to 
+# make them into separate dataframes. 
+
 DistMat_east <- subset(DistMat, eoa==1)
 DistMat_west <- subset(DistMat, eoa==0)
 DistMat = subset(DistMat, select = -c(eoa) )
 DistMat_west = subset(DistMat_west, select = -c(eoa) )
 DistMat_east = subset(DistMat_east, select = -c(eoa) )
 
-# Fill up the vectors so that both have a length of 5,000
+# Setting the seed for some randomization but also
+# they wanted to fill up the vectors so that they both have legnths of 
+# 5000 apparently. 
+
 set.seed(1000)
 DistMat_east <- rbind(DistMat_east, DistMat_east[sample(169), ])
 set.seed(1000)
@@ -95,62 +135,86 @@ DistMat_west <- rbind(DistMat_west, DistMat_west[sample(331),])
 ```
 
 
-```{r}
-############
-#### RI ####
-############
+```{r Randomization}
 
-# shuffle distance matrices 
+# I get this step now. They want to shuffle thier
+# data sets from before. 
+
 set.seed(1000)
 DistMat_east <- DistMat_east[sample(nrow(DistMat_east)),]
 set.seed(1000)
 DistMat_west <- DistMat_west[sample(nrow(DistMat_west)),]
 
-# random sampling with replacement, 10,000 draws from values east and west of the river 
+# They are creating a randome samling with replacment data frame. 
+
 n <- 10000
 set.seed(1000)
 rand_vals <- sample(c(1:5000), n, replace = TRUE)
 
-# store coefficient in vector with elements equal to draws
+# They want to "store coefficient in vector
+# with elements equal to draws" according to thier
+# code comments. I follow that. 
+
 estim <- matrix(0, nrow=n, ncol=1)
 ```
 
 
-```{r cache=TRUE}
+```{r Foor Looping, cache=TRUE}
 
-# loop through all values 
+# Okay so this is tricky right, but they are using foor
+# loop to loop through all values. 
+
 j <- 0
 for (i in rand_vals){
   j <- j + 1
-  # take row from both distance matrices (east and west), transpose, find minimum distance, add column for matching 
+  
+   
+# Then they are taking a distance from both east and west, transposing,
+# finding minimum distance and then adding a column for matching. 
+  
   dist_i_west <- as.data.frame(t(DistMat_west[i,]))
   dist_i_east <- as.data.frame(t(DistMat_east[i,]))
   dist_i <- cbind(dist_i_west, dist_i_east)
-  # Choose APC location in east or west that is closest to a given interview location
+
+# Then they choose the APC location in east or west that is closest to thier
+# interview location, according to thier notes. 
+  
   dist_i <- as.data.frame(apply(dist_i, 1, FUN=min))
   dist_i <- setDT(dist_i, keep.rownames = TRUE)
   colnames(dist_i)=c("id_psu", "drivedist")
   
-  # merge with data frame (match m:1)
+# Then they merge the data. 
+  
   combinedData <- join(data_uzbek, dist_i, by='id_psu', type='left', match='all')
   
-  # Estimate reduced form regression coefficient
+# Then they run a regression on the coperation index and 
+# the new locations. 
+  
   ivest_i <- lm(cooperation_index ~ drivedist, data=combinedData)  
   
-  # Save coef in matrix
+# Then they save the results somehow and merge them 
+# to the coef matrix they made earlier. 
+  
   estim[j,1] <- estim[j,1] + coef(ivest_i)[2] 
 }
 
 ```
 
-```{r}
-# Plot distribution of coefficients, calculate confidence interval and test
+```{r Graphing}
 
-# Create density plot
+# Okay I'm back to understanding things. So here they are shifting their
+# dat to negative again. Making it a data frame and finding the mean. 
+
 estim <- estim*-1  #convert to negative scale "closeness to barracks"
 data_combined <- as.data.frame(estim)
 mean(estim)
-figure8 <- ggplot(data_combined, aes(x=V1)) +  geom_density(bw = 0.02) +
+
+# Graphing code is graphic code. They make a density plot. 
+# Then they add in a bunch of details like a vertical line
+# and such. 
+
+figure8 <- ggplot(data_combined, aes(x=V1)) +  
+  geom_density(bw = 0.02) +
   theme_bw() + 
   ylab("Density")  + xlab("Estimate") +     
   theme(text = element_text(size=18, family="Times")) +
@@ -158,21 +222,32 @@ figure8 <- ggplot(data_combined, aes(x=V1)) +  geom_density(bw = 0.02) +
   geom_vline(xintercept=instrument$coefficients[2]*-1, linetype=2, color = "grey") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"))
-# plot output
+
+```
+
+```{r Output}
+
+# Time to make the actual graph. 
+
 figure8
 ```
 
 
-```{r}
-#Significance
+```{r Signifigance}
 
-# reference value (-0.1109755 )
+# I think they want the statistcal signifigance here.
+
 instrument$coefficients[2]*-1
 
-# 90 percent percentile two-sided, 95% percentile one-sided (statistically sign. at 5% level)
+# Now they want the 90% and 95% points of the estim data from 
+# the for loop. 
+
 print(c(quantile(estim, .05),quantile(estim, .95))) 
 
-# P-value/ number of estimates smaller than observed coefficient 
+# Okay I get this too. They want to calculate thier p value 
+# so they find the number of estimates smaller than observed
+# coefficient. 
+
 percentile <- function(x,perc) ecdf(x)(perc)
 p <- (percentile(estim,-0.1109755))
 p

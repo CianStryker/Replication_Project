@@ -1,10 +1,13 @@
 ---
-title: "Description"
+title: "Description of Project"
 author: "Cian Stryker"
-date: "2/20/2020"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
+
+<br>
+
+I will be replicating the paper "Ethnic Riots and Prosocial Behavior: Evidence from Kyrgyzstan" written by Anselm Hager, Krzysztof Krakowski, and Max Schaub. Using survey data performed in Osh, Kyrgyzstan after the 2010 ethnic riots, this paper attempts to see if exposure to ethnic riots has a negative effect on both in and out group members. The literature on prosocial behavior following ethnic violence suggests that prosocial behavior towards the aggressor group is negatively affected. Some literature also suggests that prosocial behavior towards the in-group, or the victim group, should improve as a result of shared conflict. This paper finds, however, that prosocial behavior for both in and out groups are negatively affected.  The authors measure prosocial behavior by having subjects complete a prisoner's dilemma scenario and dictator game hypothetical that measure prosocial behavior. They use these responses in a series of regression to measure the average effect on prosocial behavior amongst subjects who were exposed to violence during the riots. They also pursue robust testing of confounding variables such as access to APC vehicles that allowed rioters to break through Uzbek barricades. This portion of the paper relies on geospatial data that is combined with the original testing within a series of regressions. The authors use robust statistical measures alongside geospatial data to identify inconsistencies within the literature regarding the effects of ethnic violence.

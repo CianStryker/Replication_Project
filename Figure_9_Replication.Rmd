@@ -8,34 +8,55 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
+
+# Figure 9's time. Same deal
+# as before. 
+
 rm(list=ls())
 
-# load required libraries
+# Less libraries now. That's
+# great
+
 library(ggplot2)
 library(readstata13)
 ```
 
-```{r}
+```{r Loading Data}
+
+# Here they load the data in. 
+
+data <- read.dta13("./kyrgyzstan.dta")
+```
+
+```{r My Loading Data}
+
+# My code for loading it in. 
 
 load("~/Replication_Project/Data/kyrgyzstan.RData")
-
 data <- table
 ```
 
-```{r}
-##### Cleaning 
-# recode variables
+```{r Cleaning}
+
+# They're just making affected an 
+# integer again and then shifting the
+# binary state to negative 1 and 0.
+
 data$affected <- as.integer(data$affected)
 data$affected <- data$affected - 1
 
-# subset data set according to ethnic groups
+# Now they subset the data. 
 
 data_uzbek <- data[which(data$ethnicity=="Uzbek"),]
 ```
 
-```{r}
-##### Figure
-# run regressions of loss indecse on riot for Uzbek sample
+```{r Regressions}
+
+# This bit of the paper is an exploration of whether
+# the people who were affected by the riots actually
+# had more damages than other types. So they run the 
+# OLS regressions on each type of loss. 
+
 model1 <- lm(losses_1 ~ affected, data=data_uzbek)
 model2 <- lm(losses_2 ~ affected, data=data_uzbek)
 model3 <- lm(losses_3 ~ affected, data=data_uzbek)
@@ -43,8 +64,11 @@ model4 <- lm(losses_4 ~ affected, data=data_uzbek)
 model5 <- lm(losses_5 ~ affected, data=data_uzbek)
 ```
 
-```{r}
-# extract coefficients and standard errors
+```{r Extraction}
+
+# Here they just want to grab their coefficients from 
+# the regressions they ran earlier. 
+
 model1Frame <- data.frame(Variable = rownames(summary(model1)$coef),
                           Coefficient = summary(model1)$coef[, 1],
                           SE = summary(model1)$coef[, 2],
@@ -67,24 +91,31 @@ model5Frame <- data.frame(Variable = rownames(summary(model5)$coef),
                           modelName = "Business")[2,]
 ```
 
-```{r}
-# rowbind data (coefficients and standard errors) from regression models 
+```{r Tweaking}
+
+# Here they once again want to combine all thier data into one. 
+# They also want to list them in a particular order. 
+
 allModelFrame <- data.frame(rbind(model1Frame, model2Frame, model3Frame, model4Frame, model5Frame))
 allModelFrame$Variable <- c(1,2,3,4, 5)
 allModelFrame$Variable <- factor(allModelFrame$Variable, labels=c("Car", "TV", "House", "Money", "Business"))
 levels(allModelFrame$Variable) <- gsub("  ", "\n", levels(allModelFrame$Variable))
 
-# set multipliers for confidence intervals
+# Now they want to calculat the 90 and 95 CIs. 
+
 interval1 <- -qnorm((1-0.90)/2)  # 90% multiplier
 interval2 <- -qnorm((1-0.95)/2)  # 95% multiplier
 
-# set colors for graph
+# And then its another round of color setting. 
+
 myColors <- c("#000000", "#000000", "#000000", "#000000", "#000000")
 ```
 
-```{r}
+```{r Graphing}
 
-# Plot
+# Same graphing code from Figure 5 and 6. Refer to my comments
+# on Figure 5 for a more detailed analysis of what's happening. 
+
 figure7 <- ggplot(allModelFrame, aes(colour = as.factor(Variable))) + 
   geom_hline(yintercept = 0, colour = gray(1/2), lty = 2) + 
   geom_linerange(aes(x = Variable, ymin = Coefficient - SE*interval1,
@@ -103,8 +134,9 @@ figure7 <- ggplot(allModelFrame, aes(colour = as.factor(Variable))) +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-```{r}
+```{r Plotting}
 
-# plot output
+# output
+
 figure7
 ```

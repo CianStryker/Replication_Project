@@ -1,0 +1,349 @@
+---
+title: "Extensions"
+author: "Cian Stryker"
+date: "3/17/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# Loading all libraries
+# that I'll need. 
+
+library(gt)
+library(stargazer)
+library(tidyverse)
+```
+
+```{r Loading}
+
+# My loading code. 
+
+load("~/Replication_Project/Data/kyrgyzstan.RData")
+data <- table
+
+```
+
+```{r Starting Kyrgyz Data Tweaks}
+
+# This seems like they're just shifting the
+# data they want to use later by making certain
+# columns integers, specifically the affected 
+# and prisoner dilemma columns. Oh and the affected
+# - 1 bit is to shift the binary from 1 and 0s to
+# 0 and -1s. 
+
+data$affected <- as.integer(data$affected)
+data$affected <- data$affected - 1
+data$pd_in <- as.integer(data$pd_in)
+data$pd_out <- as.integer(data$pd_out)
+
+# This is for the later regression table 
+
+data$social_cap_retro <- data$leadership
+
+# here they just want to grab their data for Uzbeks
+# as opposed to including the data for thier Kyrgyz 
+# respondents. 
+
+data_kyrgyz <- data[which(data$ethnicity=="Kyrgyz"),]
+
+
+# Alright I had to find out what scale() does, but
+# apparently its a way of standardizing a bunch of 
+# data. The specifics are lost on my but the authors are 
+# scaling so that they can run regressions on the various 
+# in and out groups for the prisonners dilemma and dictator 
+# game results. They are also making an overall cooperation
+# index variable for later graphing, which they want to be 
+# on one standard scale, hence the scaling. 
+
+data_kyrgyz$pd_in_scale <- scale(data_kyrgyz$pd_in)
+data_kyrgyz$dg_in_scale <- scale(data_kyrgyz$dg_in)
+data_kyrgyz$pd_out_scale <- scale(data_kyrgyz$pd_out)
+data_kyrgyz$dg_out_scale <- scale(data_kyrgyz$dg_out)
+data_kyrgyz$cooperation_index <- rowSums(cbind(data_kyrgyz$pd_in_scale, 
+                                              data_kyrgyz$dg_in_scale, 
+                                              data_kyrgyz$pd_out_scale, 
+                                              data_kyrgyz$dg_out_scale), na.rm=T)/4
+
+
+```
+
+```{r Figure 5 Kyrgyz Data}
+
+# Alright I totally understand what's happening here. 
+# They are just running an OLS regression on the variables
+# that they made and scaled in the last step and trying
+# to see the effect that the affected variable had on each
+# of them in turn. 
+
+model1 <- lm(pd_in_scale ~ affected, data=data_kyrgyz)
+model2 <- lm(dg_in_scale ~ affected, data=data_kyrgyz)
+model3 <- lm(pd_out_scale ~ affected, data=data_kyrgyz)
+model4 <- lm(dg_out_scale ~ affected, data=data_kyrgyz)
+model5 <- lm(cooperation_index ~ affected, data=data_kyrgyz)
+
+
+# This all makes sense too. After running the regressions 
+# the authors have 5 list type data, but they need to extract 
+# the information that they want. It's kinda weird but I see that 
+# using this code they are getting the Variable, Coefficient, 
+# standard error, and name of test for each model. Cool. 
+
+model1Frame <- data.frame(Variable = rownames(summary(model1)$coef),
+                          Coefficient = summary(model1)$coef[, 1],
+                          SE = summary(model1)$coef[, 2],
+                          modelName = "Prisoner's Dilemma ingroup")[2,]
+model2Frame <- data.frame(Variable = rownames(summary(model2)$coef),
+                          Coefficient = summary(model2)$coef[, 1],
+                          SE = summary(model2)$coef[, 2],
+                          modelName = "Dictator Game ingroup")[2,]
+model3Frame <- data.frame(Variable = rownames(summary(model3)$coef),
+                          Coefficient = summary(model3)$coef[, 1],
+                          SE = summary(model3)$coef[, 2],
+                          modelName = "Prisoner's Dilemma outgroup")[2,]
+model4Frame <- data.frame(Variable = rownames(summary(model4)$coef),
+                          Coefficient = summary(model4)$coef[, 1],
+                          SE = summary(model4)$coef[, 2],
+                          modelName = "Dictator Game outgroup")[2,]
+model5Frame <- data.frame(Variable = rownames(summary(model5)$coef),
+                          Coefficient = summary(model5)$coef[, 1],
+                          SE = summary(model5)$coef[, 2],
+                          modelName = "Index")[2,]
+
+
+# So now they want to put all those extracted models together
+# in one dataframe. Cool. Checks out. They're using rbind to do taht
+# giving them a numeric order, and then using factor to put them 
+# in the order that they want. Not really sure what levels() does, 
+# but it looks like it cleans up the variable names to make them 
+# easier to graph later. 
+
+
+allModelFrame <- data.frame(rbind(model1Frame, model2Frame, model3Frame, model4Frame, model5Frame))
+allModelFrame$Variable <- c(1,2,3,4, 5)
+allModelFrame$Variable <- factor(allModelFrame$Variable, 
+                                 labels=c("Prisoner's Dilemma  Ingroup", "Dictator Game  Ingroup", 
+                                          "Prisoner's Dilemma  Outgroup", "Dictator Game  Outgroup", 
+                                          "Prosociality  Index"))
+
+levels(allModelFrame$Variable) <- gsub("  ", "\n", levels(allModelFrame$Variable))
+
+# Okay so they want to set confidence intervals 
+# at 90% and 95%. Seems clear. 
+
+interval1 <- -qnorm((1-0.90)/2)  # 90% multiplier
+interval2 <- -qnorm((1-0.95)/2)  # 95% multiplier
+
+myColors <- c("#000000", "#000000", "#000000", "#000000", "#000000")
+
+# I understand ggplot so this is cool. A bunch of detail stuff such
+# as adding a vertical dotted line at 0.00 mark. Then they make a 
+# horizontal linerange for every variable with thier ranges being
+# the SE * the confidence intervals calculated before. Then the points
+# show the mean effect which is the SE times the 95% CI with some cool
+# shapes added in for coolness. Switching up the y axis labels, setting
+# the theme, setting the colors, getting rid of the ticks, and generally
+# making things pretty. 
+
+figure5 <- ggplot(allModelFrame, aes(colour = as.factor(Variable))) + 
+  geom_hline(yintercept = 0, colour = gray(1/2), lty = 2) + 
+  geom_linerange(aes(x = Variable, ymin = Coefficient - SE*interval1,
+                     ymax = Coefficient + SE*interval1),
+                 lwd = 1, position = position_dodge(width = 1/2)) + 
+  geom_pointrange(aes(x = Variable, y = Coefficient, ymin = Coefficient - SE*interval2,
+                      ymax = Coefficient + SE*interval2),
+                  lwd = 1/4, position = position_dodge(width = 1/2),
+                  shape = 21, fill = "WHITE") + 
+  coord_flip(ylim = c(-1,1)) + theme_bw() +
+  scale_y_continuous(breaks = c(-1, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1)) +
+  theme(legend.position="none") + 
+  ylab("")  + xlab("") +     
+  scale_color_manual(values=myColors) +   
+  theme(text = element_text(size=12)) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+\begin{center}
+\textbf{Figure 1: Affected Kyrgyz Prosocial Behavior}
+
+```{r Figure 5 Kyrgyz Data Output, fig.align="center"}
+
+# Ah here they want to show
+# the graph they made. I 
+# generally speaking understand 
+# figure 5. 
+
+figure5
+```
+
+\end{center}
+
+\pagebreak
+
+```{r Kyrgyz Table Extension, include=FALSE}
+
+# So many multivariate linear regressions. So this 
+# is their table info which requires the prisoner dilemma, 
+# dictator game, and cooperation index to be regressed by 
+# a bushel of variables. Here is where I'd like to do some
+# playing around when its my turn to make changes. 
+
+model1x <- lm(pd_in_scale ~ affected + economy_index + state_index + social_cap_retro + access_index + aj_vote_share, data=data_kyrgyz)
+model2x <- lm(dg_in_scale ~ affected + economy_index + state_index + social_cap_retro + access_index + aj_vote_share, data=data_kyrgyz)
+model3x <- lm(pd_out_scale ~ affected + economy_index + state_index + social_cap_retro + access_index + aj_vote_share, data=data_kyrgyz)
+model4x <- lm(dg_out_scale ~ affected + economy_index + state_index + social_cap_retro + access_index + aj_vote_share, data=data_kyrgyz)
+model5x <- lm(cooperation_index ~ affected + economy_index + state_index + social_cap_retro + access_index + aj_vote_share, data=data_kyrgyz)
+
+
+
+# I actually don't know why they are
+# running a summary on every model but
+# I assume they need to in order to run
+# the stargazer. 
+
+summary(model1x)
+summary(model2x)
+summary(model3x)
+summary(model4x)
+summary(model5x)
+
+
+```
+
+\begin{center}
+\textbf{Table 1: Kyrgyz Data}
+
+```{r Kyrgyz Table Extension Stargazer, results = "asis"}
+
+cat("\\scalebox{.59}{")
+
+stargazer(model1x, model2x, model3x, model4x, model5x,
+          covariate.labels = c("Destruction", "Wealth index", "State capacity index", "Community policing index", "Accessibility index", "AJ %"),
+          dep.var.labels = c("Prisoner's Dilemma (In-Group)", "Dictator Game (In-Group)", "Prisoner's Dilemma (Out-Group)", "Dictator Game (Out-Group)" , "Cooperation-Index"),
+          star.char = c("*", "**", "***"),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          single.row = TRUE, 
+          font.size = NULL,
+          column.sep.width = "1pt",
+          header = FALSE, type = 'latex', float = FALSE)
+
+cat("}") # for the end of the scalebox
+
+```
+
+\end{center}
+
+\pagebreak
+
+
+
+
+```{r Uzbek Table Confounder Extension}
+
+data_uzbek <- data[which(data$ethnicity=="Uzbek"),]
+
+data_uzbek$pd_in_scale <- scale(data_uzbek$pd_in)
+data_uzbek$dg_in_scale <- scale(data_uzbek$dg_in)
+data_uzbek$pd_out_scale <- scale(data_uzbek$pd_out)
+data_uzbek$dg_out_scale <- scale(data_uzbek$dg_out)
+data_uzbek$cooperation_index <- rowSums(cbind(data_uzbek$pd_in_scale, 
+                                              data_uzbek$dg_in_scale, 
+                                              data_uzbek$pd_out_scale, 
+                                              data_uzbek$dg_out_scale), na.rm=T)/4
+
+
+y <- data_uzbek %>%
+  mutate(comm_employer = case_when(comm_employer == 1 ~ "Kyrgyz",
+                                   comm_employer == 4 ~ "Other", 
+                                   comm_employer == -1 ~ "Unemployed",
+                                   comm_employer == 2 ~ "Uzbek", 
+                                   comm_employer == 3 ~ "Russian"))
+
+y$comm_employer <- factor(y$comm_employer, levels = c("Kyrgyz", "Uzbek", "Russian", "Unemployed", "Other"))
+
+
+model11 <- lm(pd_in_scale ~ affected + comm_lang_use  + education +  comm_employer, data=y)
+model22 <- lm(dg_in_scale ~ affected + comm_lang_use + education + comm_employer, data=y)
+model33 <- lm(pd_out_scale ~ affected + comm_lang_use +  education +  comm_employer, data=y)
+model44 <- lm(dg_out_scale ~ affected + comm_lang_use + education +  comm_employer, data=y)
+model55 <- lm(cooperation_index ~ affected + comm_lang_use + education + comm_employer, data=y)
+```
+
+
+\begin{center}
+\textbf{Table 2: Uzbek Confounders}
+
+```{r Table 2 Stargazer, results = "asis"}
+
+# Alright so this is weird. I know they are using stargazer 
+# to make the really nice looking table in the paper. I don't know
+# how this code works though. I can't seem to replicate it myself.
+# This is something else I'll need Alice's help with. Or I just need 
+# enough time to figure out how stargazer works. 
+cat("\\scalebox{.59}{")
+
+
+stargazer(model11, model22, model33, model44, model55,
+          covariate.labels = c("Destruction", "Common Language Usage", "Education", "Kyrgyz Employer", "Uzbek Employer", "Russian Employer", "Unemployed", "Constant"),
+          dep.var.labels = c("Prisoner's Dilemma (In-Group)", "Dictator Game (In-Group)", "Prisoner's Dilemma (Out-Group)", "Dictator Game (Out-Group)" , "Cooperation-Index"),
+          star.char = c("*", "**", "***"),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          single.row = TRUE, 
+          font.size = NULL,
+          column.sep.width = "1pt",
+          header = FALSE, type = 'latex', float = FALSE)
+
+
+
+cat("}") # for the end of the scalebox
+```
+
+
+\end{center}
+
+
+\pagebreak
+
+```{r Table 3}
+model11x <- lm(pd_in_scale ~ affected + comm_lang_use + affected * comm_lang_use, data=data_uzbek)
+model22x <- lm(dg_in_scale ~ affected + comm_lang_use + affected * comm_lang_use, data=data_uzbek)
+model33x <- lm(pd_out_scale ~ affected + comm_lang_use + affected * comm_lang_use, data=data_uzbek)
+model44x <- lm(dg_out_scale ~ affected + comm_lang_use + affected * comm_lang_use, data=data_uzbek)
+model55x <- lm(cooperation_index ~ affected + comm_lang_use + affected * comm_lang_use, data=data_uzbek)
+```
+
+
+\begin{center}
+\textbf{Table 3: Uzbek Victimization and Common Language Usage Interaction}
+
+```{r Table 3 Stargazer, results = "asis"}
+
+# Alright so this is weird. I know they are using stargazer 
+# to make the really nice looking table in the paper. I don't know
+# how this code works though. I can't seem to replicate it myself.
+# This is something else I'll need Alice's help with. Or I just need 
+# enough time to figure out how stargazer works. 
+cat("\\scalebox{.59}{")
+
+
+stargazer(model11x, model22x, model33x, model44x, model55x,
+          covariate.labels = c("Destruction", "Common Language Usage", "Interaction", "Constant"),
+          dep.var.labels = c("Prisoner's Dilemma (In-Group)", "Dictator Game (In-Group)", "Prisoner's Dilemma (Out-Group)", "Dictator Game (Out-Group)" , "Cooperation-Index"),
+          star.char = c("*", "**", "***"),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          single.row = TRUE, 
+          font.size = NULL,
+          column.sep.width = "1pt",
+          header = FALSE, type = 'latex', float = FALSE)
+
+
+
+cat("}") # for the end of the scalebox
+```
+
+
+\end{center}

@@ -14,6 +14,12 @@ knitr::opts_chunk$set(echo = FALSE)
 library(gt)
 library(stargazer)
 library(tidyverse)
+library(AER)
+library(ggplot2)
+library(readstata13)
+library(spdep) 
+library(tseries)
+library(spatialreg)
 ```
 
 ```{r Loading}
@@ -240,9 +246,158 @@ cat("}") # for the end of the scalebox
 \pagebreak
 
 
+```{r Kyrygz Prosocial Instrument}
+
+data$distance <- data$apc_min_distance
 
 
+data_kyrgyz$distance <- 1-data_kyrgyz$apc_min_distance
+dataAgg <- aggregate(data_kyrgyz[,c("affected", "distance")], 
+                     list(data_kyrgyz$id_psu),
+                     mean)
+
+
+first_stage_ind <- lm(affected ~ distance, data=data_kyrgyz)
+first_stage_psu <- lm(affected ~ distance, data=dataAgg)
+
+model11_6 <- lm(pd_in_scale ~ distance , data=data_kyrgyz)
+model12_6 <- ivreg(pd_in_scale ~ affected | distance, data = data_kyrgyz)
+model21_6 <- lm(dg_in_scale ~ distance , data=data_kyrgyz)
+model22_6 <- ivreg(dg_in_scale ~ affected | distance , data = data_kyrgyz)
+model31_6 <- lm(pd_out_scale ~ distance , data=data_kyrgyz)
+model32_6 <- ivreg(pd_out_scale ~ affected  | distance , data = data_kyrgyz)
+model41_6 <- lm(dg_out_scale ~ distance , data=data_kyrgyz)
+model42_6 <- ivreg(dg_out_scale ~ affected  | distance , data = data_kyrgyz)
+model51_6 <- lm(cooperation_index ~ distance , data=data_kyrgyz)
+model52_6 <- ivreg(cooperation_index ~ affected  | distance , data = data_kyrgyz)
+
+dataAgg_6 <- aggregate(data_kyrgyz[,c("apc_min_distance", "distance", "pd_in_scale", "dg_in_scale", 
+                                   "pd_out_scale", "dg_out_scale", "cooperation_index", "affected", 
+                                   "economy_index", "state_index", "social_cap_retro")], 
+                     list(data_kyrgyz$id_psu),
+                     mean)
+
+names(dataAgg_6)[1] <- "psu"
+
+
+dataAgg_6 <- dataAgg_6[!is.na(dataAgg_6$social_cap_retro),] 
+
+
+model1_6 <- lm(pd_in_scale ~ distance , data=dataAgg_6)
+model2_6 <- lm(dg_in_scale ~ distance , data=dataAgg_6)
+model3_6 <- lm(pd_out_scale ~ distance , data=dataAgg_6)
+model4_6 <- lm(dg_out_scale ~ distance , data=dataAgg_6)
+model5_6 <- lm(cooperation_index ~ distance , data=dataAgg_6)
+
+model11Frame_6 <- data.frame(Variable = rownames(summary(model11_6)$coef),
+                           Coefficient = summary(model11_6)$coef[, 1],
+                           SE = summary(model11_6)$coef[, 2],
+                           modelName = "PD ingroup")[2,]
+model21Frame_6 <- data.frame(Variable = rownames(summary(model21_6)$coef),
+                           Coefficient = summary(model21_6)$coef[, 1],
+                           SE = summary(model21_6)$coef[, 2],
+                           modelName = "DG ingroup")[2,]
+model31Frame_6 <- data.frame(Variable = rownames(summary(model31_6)$coef),
+                           Coefficient = summary(model31_6)$coef[, 1],
+                           SE = summary(model31_6)$coef[, 2],
+                           modelName = "PD outgroup")[2,]
+model41Frame_6 <- data.frame(Variable = rownames(summary(model41_6)$coef),
+                           Coefficient = summary(model41_6)$coef[, 1],
+                           SE = summary(model41_6)$coef[, 2],
+                           modelName = "DG outgroup")[2,]
+model51Frame_6 <- data.frame(Variable = rownames(summary(model51_6)$coef),
+                           Coefficient = summary(model51_6)$coef[, 1],
+                           SE = summary(model51_6)$coef[, 2],
+                           modelName = "Index")[2,]
+model12Frame_6 <- data.frame(Variable = rownames(summary(model12_6)$coef),
+                           Coefficient = summary(model12_6)$coef[, 1],
+                           SE = summary(model12_6)$coef[, 2],
+                           modelName = "PD ingroup")[2,]
+model22Frame_6 <- data.frame(Variable = rownames(summary(model22_6)$coef),
+                           Coefficient = summary(model22_6)$coef[, 1],
+                           SE = summary(model22_6)$coef[, 2],
+                           modelName = "DG ingroup")[2,]
+model32Frame_6 <- data.frame(Variable = rownames(summary(model32_6)$coef),
+                           Coefficient = summary(model32_6)$coef[, 1],
+                           SE = summary(model32_6)$coef[, 2],
+                           modelName = "PD outgroup")[2,]
+model42Frame_6 <- data.frame(Variable = rownames(summary(model42_6)$coef),
+                           Coefficient = summary(model42_6)$coef[, 1],
+                           SE = summary(model42_6)$coef[, 2],
+                           modelName = "DG outgroup")[2,]
+model52Frame_6 <- data.frame(Variable = rownames(summary(model52_6)$coef),
+                           Coefficient = summary(model52_6)$coef[, 1],
+                           SE = summary(model52_6)$coef[, 2],
+                           modelName = "Index")[2,]
+
+# So they wanted to bring all models done for
+# the original data. And then arrange the order
+# using factor. 
+
+allModelFrame1_6 <- data.frame(rbind(model11Frame_6, model21Frame_6, model31Frame_6, model41Frame_6, model51Frame_6))
+allModelFrame1_6$Variable <- c(1,2,3,4,5)
+allModelFrame1_6$Variable <- factor(allModelFrame1_6$Variable, labels=c("Prisoner's Dilemma  Ingroup", "Dictator Game  Ingroup", "Prisoner's Dilemma  Outgroup", "Dictator Game  Outgroup", "Prosociality-  index"))
+levels(allModelFrame1_6$Variable) <- gsub("  ", "\n", levels(allModelFrame1_6$Variable))
+
+# So now they want to combine all the models that have the spatial 
+# component to them. I'm a little confused about what 2SL is, but
+# the code is similar to before. 
+
+allModelFrame2_6 <- data.frame(rbind(model12Frame_6, model22Frame_6, model32Frame_6, model42Frame_6, model52Frame_6))
+allModelFrame2_6$Variable <- c(1,2,3,4,5)
+allModelFrame2_6$Variable <- factor(allModelFrame2_6$Variable, labels=c("Prisoner's Dilemma  Ingroup", "Dictator Game  Ingroup", "Prisoner's Dilemma  Outgroup", "Dictator Game  Outgroup", "Prosociality-  index"))
+levels(allModelFrame2_6$Variable) <- gsub("  ", "\n", levels(allModelFrame2_6$Variable))
+
+
+# allModelFram <- rbind(allModelFrame1, allModelFrame2, allModelFrame3)
+# allModelFram$matrix_style <- rep(c("Instrument", "2SLS", "Instrument (SAM)"),each=5)
+
+
+allModelFram <- rbind(allModelFrame1_6, allModelFrame2_6)
+allModelFram$test <- rep(c("Instrument", "Instrument", "Instrument", "Instrument", "Instrument", "2SLS", "2SLS", "2SLS", "2SLS", "2SLS"))
+
+interval1 <- -qnorm((1-0.90)/2)  # 90% multiplier
+interval2 <- -qnorm((1-0.95)/2)  # 95% multiplier
+
+# They set up their dodge position? I guess
+# that helps with the graphing? 
+
+pd = position_dodge(0.5)
+
+
+# aes(shape=matrix_style))
+
+
+figure6 <- ggplot(allModelFram, aes(shape=test)) + 
+  geom_hline(yintercept = 0, colour = gray(1/2), lty = 2) + 
+  geom_linerange(aes(x = Variable, ymin = Coefficient - SE*interval1,
+                     ymax = Coefficient + SE*interval1),
+                 lwd = 1, position = pd) + 
+  geom_linerange(aes(x = Variable, ymin = Coefficient - SE*interval2,
+                     ymax = Coefficient + SE*interval2),
+                 lwd = 1/4, position = pd) + 
+  geom_point(aes(x = Variable, y = Coefficient, shape = test),
+             position = pd,fill = "WHITE", size = 3) + 
+  coord_flip(ylim = c(-1.5,1.5)) + theme_bw() + 
+  theme(legend.position="bottom") + 
+  scale_shape_manual(values = c(23, 24, 25), name ="") +
+  ylab("")  + xlab("") +     
+  theme(text = element_text(size=18))
+```
+
+\begin{center}
+\textbf{Model 2: Kyrgyz Prosocial Behavior with Instrumental Variable}
+
+```{r Output Prosocial Kyrgyz Instrument, fig.align="center"}
+
+figure6
+```
+
+\end{center}
+
+\pagebreak
 ```{r Uzbek Table Confounder Extension}
+
 
 data_uzbek <- data[which(data$ethnicity=="Uzbek"),]
 
@@ -347,3 +502,4 @@ cat("}") # for the end of the scalebox
 
 
 \end{center}
+
